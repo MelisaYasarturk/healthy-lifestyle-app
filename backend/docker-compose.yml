@@ -1,0 +1,15 @@
+services:
+  postgres_dev:
+    image: postgres:16
+    container_name: healthy_postgres_dev
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app_dev
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_dev_data:

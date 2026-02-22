@@ -1,0 +1,308 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/**
+ * AUTH_USERS (uuid PK)
+ * PROFILES (uuid PK)  -- 1:1
+ */
+model AuthUser {
+  id      String  @id @db.Uuid
+  profile Profile?
+
+  @@map("auth_users")
+}
+
+model Profile {
+  id              String   @id @db.Uuid
+  fullName        String?  @map("full_name")
+  gender          String?
+  birthDate       DateTime? @db.Date @map("birth_date")
+  heightCm        Decimal? @db.Decimal @map("height_cm")
+  weightKg        Decimal? @db.Decimal @map("weight_kg")
+  goalType        String?  @map("goal_type")
+  activityLevel   String?  @map("activity_level")
+  targetWeightKg  Decimal? @db.Decimal @map("target_weight_kg")
+
+  authUser        AuthUser @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  settings        UserSettings[]
+  allergies       UserAllergy[]
+  meals           Meal[]
+  recipes         Recipe[]
+  exerciseLogs    ExerciseLog[]
+  achievements    UserAchievement[]
+  dailySummaries  DailySummary[]
+
+  @@map("profiles")
+}
+
+/**
+ * USER_SETTINGS (bigint PK, uuid user_id FK -> profiles.id)
+ */
+model UserSettings {
+  id                   BigInt  @id @default(autoincrement())
+  userId               String  @db.Uuid @map("user_id")
+  timezone             String?
+  dailyCalorieTarget   Int?    @map("daily_calorie_target")
+  waterTargetMl        Int?    @map("water_target_ml")
+  notificationsEnabled Boolean @default(true) @map("notifications_enabled")
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_settings")
+}
+
+/**
+ * ALLERGENS (bigint PK)
+ * USER_ALLERGIES (bigint PK, uuid user_id FK -> profiles.id, bigint allergen_id FK -> allergens.id)
+ */
+model Allergen {
+  id      BigInt  @id @default(autoincrement())
+  code    String?
+  name    String?
+
+  userAllergies      UserAllergy[]
+  productIngredients ProductIngredient[]
+
+  @@unique([code])
+  @@map("allergens")
+}
+
+model UserAllergy {
+  id         BigInt @id @default(autoincrement())
+  userId     String @db.Uuid @map("user_id")
+  allergenId BigInt @map("allergen_id")
+
+  user     Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  allergen Allergen @relation(fields: [allergenId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([allergenId])
+  @@unique([userId, allergenId])
+  @@map("user_allergies")
+}
+
+/**
+ * FOODS (bigint PK)
+ */
+model Food {
+  id           BigInt  @id @default(autoincrement())
+  name         String?
+  source       String?
+  servingSizeG Decimal? @db.Decimal @map("serving_size_g")
+  caloriesKcal Decimal? @db.Decimal @map("calories_kcal")
+  proteinG     Decimal? @db.Decimal @map("protein_g")
+  carbsG       Decimal? @db.Decimal @map("carbs_g")
+  fatG         Decimal? @db.Decimal @map("fat_g")
+  fiberG       Decimal? @db.Decimal @map("fiber_g")
+  sugarG       Decimal? @db.Decimal @map("sugar_g")
+  sodiumMg     Decimal? @db.Decimal @map("sodium_mg")
+
+  mealItems          MealItem[]
+  recipeIngredients  RecipeIngredient[]
+
+  @@map("foods")
+}
+
+/**
+ * MEALS (bigint PK, uuid user_id FK -> profiles.id)
+ * MEAL_ITEMS (bigint PK, bigint meal_id FK, bigint food_id FK)
+ */
+model Meal {
+  id       BigInt   @id @default(autoincrement())
+  userId   String   @db.Uuid @map("user_id")
+  mealType String?  @map("meal_type")
+  mealTime DateTime @db.Timestamptz(6) @map("meal_time")
+
+  user  Profile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items MealItem[]
+
+  @@index([userId])
+  @@map("meals")
+}
+
+model MealItem {
+  id           BigInt   @id @default(autoincrement())
+  mealId       BigInt   @map("meal_id")
+  foodId       BigInt   @map("food_id")
+  quantity     Decimal? @db.Decimal
+  amountG      Decimal? @db.Decimal @map("amount_g")
+  caloriesKcal Decimal? @db.Decimal @map("calories_kcal")
+
+  meal Meal @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  food Food @relation(fields: [foodId], references: [id], onDelete: Restrict)
+
+  @@index([mealId])
+  @@index([foodId])
+  @@map("meal_items")
+}
+
+/**
+ * RECIPES (bigint PK, uuid user_id FK -> profiles.id)
+ * RECIPE_INGREDIENTS (bigint PK, bigint recipe_id FK, bigint food_id FK)
+ */
+model Recipe {
+  id     BigInt @id @default(autoincrement())
+  userId String @db.Uuid @map("user_id")
+  name   String?
+
+  user        Profile            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ingredients RecipeIngredient[]
+
+  @@index([userId])
+  @@map("recipes")
+}
+
+model RecipeIngredient {
+  id       BigInt   @id @default(autoincrement())
+  recipeId BigInt   @map("recipe_id")
+  foodId   BigInt   @map("food_id")
+  quantity Decimal? @db.Decimal
+
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  food   Food   @relation(fields: [foodId], references: [id], onDelete: Restrict)
+
+  @@index([recipeId])
+  @@index([foodId])
+  @@unique([recipeId, foodId])
+  @@map("recipe_ingredients")
+}
+
+/**
+ * EXERCISES (bigint PK)
+ * EXERCISE_LOGS (bigint PK, uuid user_id FK -> profiles.id, bigint exercise_id FK -> exercises.id)
+ */
+model Exercise {
+  id          BigInt  @id @default(autoincrement())
+  name        String?
+  category    String?
+  muscleGroup String?  @map("muscle_group")
+  metValue    Decimal? @db.Decimal @map("met_value")
+
+  logs ExerciseLog[]
+
+  @@map("exercises")
+}
+
+model ExerciseLog {
+  id         BigInt   @id @default(autoincrement())
+  userId     String   @db.Uuid @map("user_id")
+  exerciseId BigInt   @map("exercise_id")
+  startTime  DateTime @db.Timestamptz(6) @map("start_time")
+  endTime    DateTime @db.Timestamptz(6) @map("end_time")
+
+  user     Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([exerciseId])
+  @@map("exercise_logs")
+}
+
+/**
+ * PRODUCTS (bigint PK)
+ * PRODUCT_NUTRIENTS (bigint PK, bigint product_id FK)
+ * PRODUCT_INGREDIENTS (bigint PK, bigint product_id FK, bigint allergen_id FK optional-ish)
+ */
+model Product {
+  id      BigInt @id @default(autoincrement())
+  barcode String?
+  name    String?
+  brand   String?
+
+  nutrients    ProductNutrient[]
+  ingredients  ProductIngredient[]
+
+  @@unique([barcode])
+  @@map("products")
+}
+
+model ProductNutrient {
+  id           BigInt   @id @default(autoincrement())
+  productId    BigInt   @map("product_id")
+  per          String?
+  caloriesKcal Decimal? @db.Decimal @map("calories_kcal")
+  proteinG     Decimal? @db.Decimal @map("protein_g")
+  carbsG       Decimal? @db.Decimal @map("carbs_g")
+  fatG         Decimal? @db.Decimal @map("fat_g")
+  sugarG       Decimal? @db.Decimal @map("sugar_g")
+  sodiumMg     Decimal? @db.Decimal @map("sodium_mg")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_nutrients")
+}
+
+model ProductIngredient {
+  id             BigInt  @id @default(autoincrement())
+  productId      BigInt  @map("product_id")
+  ingredientText String? @map("ingredient_text")
+  allergenId     BigInt? @map("allergen_id")
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  allergen Allergen? @relation(fields: [allergenId], references: [id], onDelete: SetNull)
+
+  @@index([productId])
+  @@index([allergenId])
+  @@map("product_ingredients")
+}
+
+/**
+ * ACHIEVEMENTS (bigint PK)
+ * USER_ACHIEVEMENTS (bigint PK, uuid user_id FK -> profiles.id, bigint achievement_id FK)
+ */
+model Achievement {
+  id   BigInt @id @default(autoincrement())
+  code String?
+  name String?
+
+  userAchievements UserAchievement[]
+
+  @@unique([code])
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id            BigInt @id @default(autoincrement())
+  userId        String @db.Uuid @map("user_id")
+  achievementId BigInt @map("achievement_id")
+
+  user        Profile     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([achievementId])
+  @@unique([userId, achievementId])
+  @@map("user_achievements")
+}
+
+/**
+ * DAILY_SUMMARIES (bigint PK, uuid user_id FK -> profiles.id, date, numeric total_calories)
+ */
+model DailySummary {
+  id            BigInt   @id @default(autoincrement())
+  userId        String   @db.Uuid @map("user_id")
+  date          DateTime @db.Date
+  totalCalories Decimal? @db.Decimal @map("total_calories")
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@unique([userId, date])
+  @@map("daily_summaries")
+}
